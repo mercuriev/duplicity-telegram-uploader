@@ -1,5 +1,14 @@
 {
+  "scripts": {
+    "start": "ts-node main.ts"
+  },
   "dependencies": {
-    "telegram": "^2.26.8"
+    "dotenv": "^16.4.5",
+    "input": "^1.0.1",
+    "telegram": "^2.26.8",
+    "tsconfig-paths": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.1"
   }
 }
