@@ -1,7 +1,7 @@
 import { client } from 'client';
 import { Api } from 'telegram';
 
-export async function create(name: string): Promise<object> {
+export async function create(name: string): Promise<{id: { value: bigint }, title: string}> {
     const result = await client.invoke(
         new Api.channels.CreateChannel({
             title: name,

@@ -35,11 +35,11 @@ async function processFull(dateId: string, hostname: string)
     // create channel
     let chat = uploaded[dateId]?.chat;
     if (!chat) {
-        const created = await channel.create(`Backup: ${hostname} - ` + format(date, 'dd MMM yyyy'));
-        console.log(`Created ${created.id.value} - ${created.title}`);
+        const {id, title} = await channel.create(`Backup: ${hostname} - ` + format(date, 'dd MMM yyyy'));
+        console.log(`Created ${id.value} - ${title}`);
         uploaded[dateId] = {
-            chat: Number(created.id.value),
-            title: created.title,
+            chat: Number(id.value),
+            title: title,
             files: []
         };
         fs.writeFileSync(dbFile, JSON.stringify(uploaded, null, 2));
@@ -81,7 +81,6 @@ async function processFull(dateId: string, hostname: string)
     for (const file of files) {
         const match = file.match(/(.*?)_duplicity-full\.(\d{8}T\d{6}Z)\.manifest/);
         if (!match) throw new Error('Invalid manifest filename format.');
-        const [hostname, dateId] = match;
         await processFull(match[2], match[1]);
     }
 
