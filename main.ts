@@ -1,72 +1,88 @@
-// src/main.ts
 import { startClient, client } from 'client';
 import * as channel from 'channel';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseISO, format } from 'date-fns';
 import * as dotenv from 'dotenv';
+import {glob} from "glob";
+import {Api} from "telegram";
 
-(async () => {
-    // Read the directory path from first CLI argument
-    const dirPath = process.argv[2];
-    if (!dirPath) {
-        console.error("Please provide a directory path as the first argument.");
-        process.exit(1);
+dotenv.config();
+
+const dirPath = process.argv[2];
+if (!dirPath) {
+    console.error("Please provide a directory path as the first argument.");
+    process.exit(1);
+}
+const recipient = process.env.TELEGRAM_GPG_RECIPIENT;
+if (!recipient) {
+    console.error("Please provide the TELEGRAM_GPG_RECIPIENT in the .env file.");
+    process.exit(1);
+}
+
+// Store already uploaded files
+const dbFile = path.join(dirPath, '.uploaded.json');
+let uploaded: any = {};
+if (fs.existsSync(dbFile)) {
+    uploaded = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+}
+
+// there may be than one full archive set
+async function processFull(dateId: string, hostname: string)
+{
+    const date: Date = parseISO(dateId);
+
+    // create channel
+    let chat = uploaded[dateId]?.chat;
+    if (!chat) {
+        const created = await channel.create(`Backup: ${hostname} - ` + format(date, 'dd MMM yyyy'));
+        console.log(`Created ${created.id.value} - ${created.title}`);
+        uploaded[dateId] = {
+            chat: Number(created.id.value),
+            title: created.title,
+            files: []
+        };
+        fs.writeFileSync(dbFile, JSON.stringify(uploaded, null, 2));
+        chat = uploaded[dateId].chat;
     }
 
-    dotenv.config();
-    const recipient = process.env.TELEGRAM_GPG_RECIPIENT;
-    if (!recipient) {
-        console.error("Please provide the TELEGRAM_GPG_RECIPIENT in the .env file.");
-        process.exit(1);
+    // encrypt and upload files, oldest first
+    let files = (await glob(`*.${dateId}.*`, {cwd: dirPath, ignore: '*.gpg', stat: true, withFileTypes: true}))
+        // @ts-ignore
+        .sort((a, b) => a.mtimeMs - b.mtimeMs)
+        .map(path => path.name);
+    for (let file of files) {
+        if (uploaded[dateId].files.includes(file)) continue;
+
+        const execSync = require('child_process').execSync;
+        console.log(`gpg -e -r ${recipient} ${path.join(dirPath, file)}`);
+        execSync(`gpg -e -r ${recipient} ${path.join(dirPath, file)}`);
+        file = file + '.gpg';
+
+        console.log(`Uploading ${file}...`);
+        await client.sendFile(new Api.PeerChat(chat), {
+            file: path.join(dirPath, file),
+            caption: ''
+        })
+        fs.unlinkSync(file);
+
+        // write immediately in case of later errors
+        uploaded[dateId].files.push(file);
+        fs.writeFileSync(dbFile, JSON.stringify(uploaded, null, 2));
     }
+}
 
-    // Get the list of files in the directory and sort sequentially by volume number
-    let volumes: string[] = [];
-    let manifestFile: string | undefined = undefined;
+(async () =>
+{
+    await startClient();
 
-    try {
-        let files = fs.readdirSync(dirPath);
-
-        manifestFile = files.find(file => file.endsWith('.manifest'));
-        if (!manifestFile) throw new Error('No manifest file found.');
-        const match = manifestFile.match(/(.*?)_duplicity-full\.(\d{8}T\d{6}Z)\.manifest/);
+    // Process each full backup one by one
+    const files = await glob('*.manifest', {cwd: dirPath, ignore: '*.to.*'}); // ignore increments manifest
+    for (const file of files) {
+        const match = file.match(/(.*?)_duplicity-full\.(\d{8}T\d{6}Z)\.manifest/);
         if (!match) throw new Error('Invalid manifest filename format.');
-
-        const hostname = match[1];
-        const date = parseISO(match[2]);
-
-        // Encrypt files
-        for (const file of files) {
-            if (!file.endsWith('.gpg') && !fs.existsSync(`${path.join(dirPath, file)}.gpg`)) {
-                const execSync = require('child_process').execSync;
-                console.log(`gpg -e -r ${recipient} ${path.join(dirPath, file)}`);
-                execSync(`gpg -e -r ${recipient} ${path.join(dirPath, file)}`);
-            }
-        }
-        files = fs.readdirSync(dirPath);
-        files = files.filter(file => file.endsWith('.gpg'));
-
-        /**
-         * Uploading starts here.
-         */
-        await startClient();
-
-        const chat = await channel.create(`Backup: ${hostname} - ` + format(date, 'dd MMM yyyy'));
-        console.log(`Created ${chat.id.value} - ${chat.title}`);
-
-        for (const file of files) {
-            console.log(`Uploading ${file}...`);
-            await client.sendFile(chat.id.value, {
-                file: path.join(dirPath, file),
-                caption: ''
-            })
-            fs.unlinkSync(file);
-        }
-    }
-    catch (error) {
-        console.error(error);
-        process.exit(1);
+        const [hostname, dateId] = match;
+        await processFull(match[2], match[1]);
     }
 
     await client.disconnect();

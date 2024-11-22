@@ -5,6 +5,7 @@
   "dependencies": {
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
+    "glob": "^11.0.0",
     "input": "^1.0.1",
     "telegram": "^2.26.8",
     "tsconfig-paths": "^4.2.0"
