@@ -43,8 +43,8 @@ function saveSession(session: string): void {
         envContent = envContent.replace(/TELEGRAM_SESSION=.*/, `TELEGRAM_SESSION=${session}`);
     } else {
         envContent += `\nTELEGRAM_SESSION=${session}`;
+        console.log('Session string saved to .env file');
     }
 
     fs.writeFileSync(envPath, envContent);
-    console.log('Session string saved to .env file');
 }
