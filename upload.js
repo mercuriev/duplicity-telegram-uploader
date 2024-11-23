@@ -7,6 +7,13 @@ const { parseISO, format } = require('date-fns');
 const glob = require("glob").glob; // Note: `glob` needs to be imported differently in CommonJS.
 const { Api } = require("telegram");
 
+const lockFilePath = path.join(__dirname, '.uploading');
+if (fs.existsSync(lockFilePath)) {
+    console.error("Another instance of the script is running.");
+    process.exit(1);
+}
+fs.writeFileSync(lockFilePath, '');
+
 const dirPath = process.argv[2];
 if (!dirPath) {
     console.error("Please provide a directory path as the first argument.");
@@ -67,6 +74,14 @@ async function processFull(dateId, hostname) {
     }
 }
 
+process.on('exit', () => {
+    if (fs.existsSync(lockFilePath)) {
+        fs.unlinkSync(lockFilePath);
+    }
+});
+process.on('SIGINT', () => process.exit());
+process.on('SIGTERM', () => process.exit());
+
 (async () => {
     await startClient();
 
@@ -79,4 +94,6 @@ async function processFull(dateId, hostname) {
     }
 
     await client.disconnect();
+    fs.unlinkSync(lockFilePath);
+    process.exit(0);
 })();
