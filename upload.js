@@ -1,13 +1,11 @@
-import { startClient, client } from 'client';
-import * as channel from 'channel';
-import * as fs from 'fs';
-import * as path from 'path';
-import { parseISO, format } from 'date-fns';
-import * as dotenv from 'dotenv';
-import {glob} from "glob";
-import {Api} from "telegram";
-
-dotenv.config();
+const { startClient, client } = require('./src/client');
+const channel = require('./src/channel');
+const fs = require('fs');
+const path = require('path');
+const { parseISO, format } = require('date-fns');
+require('dotenv').config();
+const glob = require("glob").glob; // Note: `glob` needs to be imported differently in CommonJS.
+const { Api } = require("telegram");
 
 const dirPath = process.argv[2];
 if (!dirPath) {
@@ -22,20 +20,18 @@ if (!recipient) {
 
 // Store already uploaded files
 const dbFile = path.join(dirPath, '.uploaded.json');
-let uploaded: any = {};
+let uploaded = {};
 if (fs.existsSync(dbFile)) {
     uploaded = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
 }
 
-// there may be than one full archive set
-async function processFull(dateId: string, hostname: string)
-{
-    const date: Date = parseISO(dateId);
+// there may be more than one full archive set
+async function processFull(dateId, hostname) {
+    const date = parseISO(dateId);
 
-    // create channel
     let chat = uploaded[dateId]?.chat;
     if (!chat) {
-        const {id, title} = await channel.create(`Backup: ${hostname} - ` + format(date, 'dd MMM yyyy'));
+        const { id, title } = await channel.create(`Backup: ${hostname} - ` + format(date, 'dd MMM yyyy'));
         console.log(`Created ${id.value} - ${title}`);
         uploaded[dateId] = {
             chat: Number(id.value),
@@ -47,8 +43,7 @@ async function processFull(dateId: string, hostname: string)
     }
 
     // encrypt and upload files, oldest first
-    let files = (await glob(`*.${dateId}.*`, {cwd: dirPath, ignore: '*.gpg', stat: true, withFileTypes: true}))
-        // @ts-ignore
+    let files = (await glob(`*.${dateId}.*`, { cwd: dirPath, ignore: '*.gpg', stat: true, withFileTypes: true }))
         .sort((a, b) => a.mtimeMs - b.mtimeMs)
         .map(path => path.name);
     for (let file of files) {
@@ -60,7 +55,7 @@ async function processFull(dateId: string, hostname: string)
         file = file + '.gpg';
 
         console.log(`Uploading ${file}...`);
-        await client.sendFile(new Api.PeerChannel({channelId: chat}), {
+        await client.sendFile(new Api.PeerChannel({ channelId: chat }), {
             file: path.join(dirPath, file),
             caption: ''
         })
@@ -72,12 +67,11 @@ async function processFull(dateId: string, hostname: string)
     }
 }
 
-(async () =>
-{
+(async () => {
     await startClient();
 
     // Process each full backup one by one
-    const files = await glob('*.manifest', {cwd: dirPath, ignore: '*.to.*'}); // ignore increments manifest
+    const files = await glob('*.manifest', { cwd: dirPath, ignore: '*.to.*' });
     for (const file of files) {
         const match = file.match(/(.*?)_duplicity-full\.(\d{8}T\d{6}Z)\.manifest/);
         if (!match) throw new Error('Invalid manifest filename format.');

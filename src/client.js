@@ -1,26 +1,23 @@
-import {TelegramClient} from 'telegram';
-import {StringSession} from 'telegram/sessions';
-import input from 'input';
-import * as dotenv from 'dotenv';
-import * as fs from 'fs';
+const { TelegramClient } = require('telegram');
+const { StringSession } = require('telegram/sessions');
+const input = require('input');
+require('dotenv').config();
+const fs = require('fs');
 
-dotenv.config();
-
-const apiId: number = parseInt(process.env.TELEGRAM_API_ID || '');
-const apiHash: string = process.env.TELEGRAM_API_HASH || '';
+const apiId = parseInt(process.env.TELEGRAM_API_ID || '');
+const apiHash = process.env.TELEGRAM_API_HASH || '';
 
 if (!apiId || !apiHash) {
     throw new Error('API ID or API Hash is missing');
 }
 
-// Extract session from .env, default to empty string if not present
 const stringSession = new StringSession(process.env.TELEGRAM_SESSION || '');
 
-export const client = new TelegramClient(stringSession, apiId, apiHash, {
+const client = new TelegramClient(stringSession, apiId, apiHash, {
     connectionRetries: 5,
 });
 
-export async function startClient(): Promise<void> {
+async function startClient() {
     await client.start({
         phoneNumber: async () => await input.text('Please enter your number: '),
         password: async () => await input.text('Please enter your password: '),
@@ -29,16 +26,13 @@ export async function startClient(): Promise<void> {
     });
 
     console.log('You are now connected.');
-    // @ts-ignore
     saveSession(client.session.save());
 }
 
-// Function to save session string to .env file
-function saveSession(session: string): void {
+function saveSession(session) {
     const envPath = '.env';
     let envContent = fs.readFileSync(envPath, 'utf8');
 
-    // Update the session string in the .env file
     if (envContent.includes('TELEGRAM_SESSION')) {
         envContent = envContent.replace(/TELEGRAM_SESSION=.*/, `TELEGRAM_SESSION=${session}`);
     } else {
@@ -48,3 +42,5 @@ function saveSession(session: string): void {
 
     fs.writeFileSync(envPath, envContent);
 }
+
+module.exports = { client, startClient };
