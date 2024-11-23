@@ -60,11 +60,11 @@ async function processFull(dateId: string, hostname: string)
         file = file + '.gpg';
 
         console.log(`Uploading ${file}...`);
-        await client.sendFile(new Api.PeerChat(chat), {
+        await client.sendFile(new Api.PeerChannel({channelId: chat}), {
             file: path.join(dirPath, file),
             caption: ''
         })
-        fs.unlinkSync(file);
+        fs.unlinkSync(path.join(dirPath, file));
 
         // write immediately in case of later errors
         uploaded[dateId].files.push(file);
