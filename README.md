@@ -37,7 +37,7 @@ npm install
 To start the client and upload the backup files, run the following command, providing the directory path containing your backup files as an argument:
 
 ```bash
-node index.js /path/to/backup/files
+node upload.js /path/to/backup/files
 ```
 
 During the first run, you will be prompted to log in to your Telegram account to save the session for future use.
