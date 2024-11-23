@@ -1,7 +1,6 @@
 const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const input = require('input');
-require('dotenv').config();
 const fs = require('fs');
 
 const apiId = parseInt(process.env.TELEGRAM_API_ID || '');
@@ -30,7 +29,7 @@ async function startClient() {
 }
 
 function saveSession(session) {
-    const envPath = '.env';
+    const envPath = __dirname + '/../.env';
     let envContent = fs.readFileSync(envPath, 'utf8');
 
     if (envContent.includes('TELEGRAM_SESSION')) {

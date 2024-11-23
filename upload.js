@@ -1,9 +1,9 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
 const { startClient, client } = require('./src/client');
 const channel = require('./src/channel');
 const fs = require('fs');
 const path = require('path');
 const { parseISO, format } = require('date-fns');
-require('dotenv').config();
 const glob = require("glob").glob; // Note: `glob` needs to be imported differently in CommonJS.
 const { Api } = require("telegram");
 
