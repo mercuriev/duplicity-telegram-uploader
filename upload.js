@@ -57,8 +57,9 @@ async function processFull(dateId, hostname) {
         if (uploaded[dateId].files.includes(file)) continue;
 
         const execSync = require('child_process').execSync;
-        console.log(`gpg -e -r ${recipient} ${path.join(dirPath, file)}`);
-        execSync(`gpg -e -r ${recipient} ${path.join(dirPath, file)}`);
+        const cmd = `gpg --batch --yes -e -r ${recipient} ${path.join(dirPath, file)}`;
+        console.log(cmd);
+        execSync(cmd);
         file = file + '.gpg';
 
         console.log(`Uploading ${file}...`);
