@@ -1,6 +1,5 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
 const { startClient, client } = require('./src/client');
-const channel = require('./src/channel');
 const fs = require('fs');
 const path = require('path');
 const { parseISO, format } = require('date-fns');
@@ -41,20 +40,21 @@ if (fs.existsSync(dbFile)) {
 }
 
 // there may be more than one full archive set
-async function processFull(dateId, hostname) {
-    const date = parseISO(dateId);
+async function processFull(dateId, forum) {
+    let topic = uploaded[dateId]?.topic;
+    if (!topic) {
+        // service message to start topic's thread. topic is just replies to this service message
+        const { updates } = await client.invoke(new Api.channels.CreateForumTopic({
+            title: format(parseISO(dateId), 'dd MMM yyyy'),
+            channel: forum,
+        }));
 
-    let chat = uploaded[dateId]?.chat;
-    if (!chat) {
-        const { id, title } = await channel.create(`Backup: ${hostname} - ` + format(date, 'dd MMM yyyy'));
-        console.log(`Created ${id.value} - ${title}`);
         uploaded[dateId] = {
-            chat: Number(id.value),
-            title: title,
+            topic: updates[1].message.id,
             files: []
         };
         fs.writeFileSync(dbFile, JSON.stringify(uploaded, null, 2));
-        chat = uploaded[dateId].chat;
+        topic = uploaded[dateId].topic;
     }
 
     // encrypt and upload files, oldest first
@@ -74,9 +74,10 @@ async function processFull(dateId, hostname) {
             file: new CustomFile(file, buffer.length, '', buffer),
             maxBufferSize: buffer.length
         });
-        await client.sendFile(new Api.PeerChannel({ channelId: chat }), {
+        await client.sendFile(new Api.PeerChannel({ channelId: forum }), {
             file: uploadedFile,
-            caption: ''
+            caption: '',
+            replyTo: topic
         })
 
         // write immediately in case of later errors
@@ -93,7 +94,21 @@ async function processFull(dateId, hostname) {
     for (const file of files) {
         const match = file.match(/(.*?)_duplicity-full\.(\d{8}T\d{6}Z)\.manifest/);
         if (!match) throw new Error('Invalid manifest filename format.');
-        await processFull(match[2], match[1]);
+
+        const hostname = match[1];
+        if (!uploaded['forum']) {
+            const channel = await client.invoke(new Api.channels.CreateChannel({
+                title: `Backups of ${hostname}`,
+                about: '',
+                forum: true
+            }))
+            uploaded['forum'] = Number(channel.chats[0].id);
+            console.log(`Created forum ${uploaded['forum']}`);
+
+            fs.writeFileSync(dbFile, JSON.stringify(uploaded, null, 2));
+        }
+
+        await processFull(match[2], uploaded['forum']);
     }
 
     await client.disconnect();
