@@ -7,13 +7,6 @@ const { parseISO, format } = require('date-fns');
 const glob = require("glob").glob; // Note: `glob` needs to be imported differently in CommonJS.
 const { Api } = require("telegram");
 
-const lockFilePath = path.join(__dirname, '.uploading');
-if (fs.existsSync(lockFilePath)) {
-    console.error("Another instance of the script is running.");
-    process.exit(1);
-}
-fs.writeFileSync(lockFilePath, '');
-
 const dirPath = process.argv[2];
 if (!dirPath) {
     console.error("Please provide a directory path as the first argument.");
@@ -24,6 +17,13 @@ if (!recipient) {
     console.error("Please provide the TELEGRAM_GPG_RECIPIENT in the .env file.");
     process.exit(1);
 }
+
+const lockFilePath = path.join(dirPath, '.uploading');
+if (fs.existsSync(lockFilePath)) {
+    console.error("Another instance of the script is running.");
+    process.exit(1);
+}
+fs.writeFileSync(lockFilePath, '');
 
 // Store already uploaded files
 const dbFile = path.join(dirPath, '.uploaded.json');
