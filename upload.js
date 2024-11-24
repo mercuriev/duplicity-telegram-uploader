@@ -66,12 +66,11 @@ async function processFull(dateId, forum) {
 
         console.log(`Encrypting ${file}...`);
         const buffer = await gpg(file);
-        buffer.name = file;
 
         console.log(`Uploading ${file}...`);
         // must use uploadFile() to set maxBufferSize, it fails to create CustomBuffer otherwise
         const uploadedFile = await client.uploadFile({
-            file: new CustomFile(file, buffer.length, '', buffer),
+            file: new CustomFile(file + '.gpg', buffer.length, '', buffer),
             maxBufferSize: buffer.length
         });
         await client.sendFile(new Api.PeerChannel({ channelId: forum }), {
