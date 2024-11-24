@@ -4,8 +4,10 @@ const channel = require('./src/channel');
 const fs = require('fs');
 const path = require('path');
 const { parseISO, format } = require('date-fns');
-const glob = require("glob").glob; // Note: `glob` needs to be imported differently in CommonJS.
+const glob = require("glob").glob;
 const { Api } = require("telegram");
+const { spawn } = require('child_process');
+const {CustomFile} = require("telegram/client/uploads");
 
 const dirPath = process.argv[2];
 if (!dirPath) {
@@ -18,12 +20,18 @@ if (!recipient) {
     process.exit(1);
 }
 
+// only one uploading instance per directory
 const lockFilePath = path.join(dirPath, '.uploading');
 if (fs.existsSync(lockFilePath)) {
     console.error("Another instance of the script is running.");
     process.exit(1);
 }
 fs.writeFileSync(lockFilePath, '');
+process.on('exit', () => {
+    if (fs.existsSync(lockFilePath)) fs.unlinkSync(lockFilePath);
+});
+process.on('SIGINT', () => process.exit());
+process.on('SIGTERM', () => process.exit());
 
 // Store already uploaded files
 const dbFile = path.join(dirPath, '.uploaded.json');
@@ -56,32 +64,26 @@ async function processFull(dateId, hostname) {
     for (let file of files) {
         if (uploaded[dateId].files.includes(file)) continue;
 
-        const execSync = require('child_process').execSync;
-        const cmd = `gpg --batch --yes -e -r ${recipient} ${path.join(dirPath, file)}`;
-        console.log(cmd);
-        execSync(cmd);
-        file = file + '.gpg';
+        console.log(`Encrypting ${file}...`);
+        const buffer = await gpg(file);
+        buffer.name = file;
 
         console.log(`Uploading ${file}...`);
+        // must use uploadFile() to set maxBufferSize, it fails to create CustomBuffer otherwise
+        const uploadedFile = await client.uploadFile({
+            file: new CustomFile(file, buffer.length, '', buffer),
+            maxBufferSize: buffer.length
+        });
         await client.sendFile(new Api.PeerChannel({ channelId: chat }), {
-            file: path.join(dirPath, file),
+            file: uploadedFile,
             caption: ''
         })
-        fs.unlinkSync(path.join(dirPath, file));
 
         // write immediately in case of later errors
         uploaded[dateId].files.push(file);
         fs.writeFileSync(dbFile, JSON.stringify(uploaded, null, 2));
     }
 }
-
-process.on('exit', () => {
-    if (fs.existsSync(lockFilePath)) {
-        fs.unlinkSync(lockFilePath);
-    }
-});
-process.on('SIGINT', () => process.exit());
-process.on('SIGTERM', () => process.exit());
 
 (async () => {
     await startClient();
@@ -98,3 +100,26 @@ process.on('SIGTERM', () => process.exit());
     fs.unlinkSync(lockFilePath);
     process.exit(0);
 })();
+
+function gpg(file) {
+    return new Promise((resolve, reject) => {
+        const gpg = spawn(
+            'gpg',
+            ['--batch', '--yes', '-o', '-', '-e', '-r', recipient, path.join(dirPath, file)]
+        );
+        const chunks = [];
+
+        gpg.stdout.on('data', (chunk) => {
+            chunks.push(chunk);
+        });
+
+        gpg.on('close', (code) => {
+            if (code !== 0) {
+                reject(new Error(`Command failed with code ${code}`));
+            } else {
+                const buffer = Buffer.concat(chunks);
+                resolve(buffer);
+            }
+        });
+    });
+}
